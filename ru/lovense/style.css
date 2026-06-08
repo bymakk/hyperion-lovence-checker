@@ -285,6 +285,8 @@ tr:last-child td {
 .dpi-help {
   border-top: 1px solid #eceff3;
   padding-top: 12px;
+  --dpi-chevron-size: 0.55em;
+  --dpi-chevron-gap: 10px;
 }
 
 .dpi-help summary {
@@ -292,7 +294,41 @@ tr:last-child td {
   font-weight: 600;
   color: #1a1a1a;
   user-select: none;
-  list-style-position: outside;
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dpi-chevron-gap);
+  line-height: 1.45;
+}
+
+.dpi-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.dpi-help summary::marker {
+  content: "";
+}
+
+.dpi-help summary::before {
+  content: "";
+  flex: 0 0 var(--dpi-chevron-size);
+  width: var(--dpi-chevron-size);
+  height: var(--dpi-chevron-size);
+  margin-top: 0.42em;
+  border-right: 2px solid #888;
+  border-bottom: 2px solid #888;
+  transform: rotate(-45deg);
+  transform-origin: 40% 60%;
+  transition: transform 0.15s ease;
+}
+
+.dpi-help[open] summary::before {
+  transform: rotate(45deg);
+  margin-top: 0.28em;
+}
+
+.dpi-help-body {
+  padding-left: calc(var(--dpi-chevron-size) + var(--dpi-chevron-gap));
 }
 
 .dpi-help-intro {
