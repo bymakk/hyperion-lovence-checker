@@ -8,8 +8,8 @@ const decodeItem = (aliveCardinality, state) => {
 }
 
 export const decodeShare = async (repo, commitHex, buf) => {
-  let helpersUrl = `https://raw.githubusercontent.com/${repo}/${commitHex}/ru/tcp-16-20/share/helpers.js`;
-  let endpointsUrl = `https://raw.githubusercontent.com/${repo}/${commitHex}/ru/tcp-16-20/suite.v2.json`;
+  let helpersUrl = `https://raw.githubusercontent.com/${repo}/${commitHex}/ru/lovense/share/helpers.js`;
+  let endpointsUrl = `https://raw.githubusercontent.com/${repo}/${commitHex}/ru/lovense/suite.v2.json`;
 
   if (DEBUG) {
     helpersUrl = "./helpers.js";

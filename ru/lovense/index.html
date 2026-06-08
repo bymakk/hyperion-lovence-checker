@@ -20,10 +20,63 @@
   </div>
   <div id="shareTs"></div>
   <div id="asn"></div>
+  <div id="verdict" class="verdict verdict-hidden" aria-live="polite">
+    <div id="verdict-icon" class="verdict-icon"></div>
+    <div class="verdict-body">
+      <h2 id="verdict-title" class="verdict-title"></h2>
+      <p id="verdict-text" class="verdict-text"></p>
+      <ul id="verdict-details" class="verdict-details"></ul>
+    </div>
+  </div>
+  <p class="legend">
+    <b>Важность:</b>
+    <span class="tier-badge tier-critical">Критично</span> — без этого Extension/OBS не работают;
+    <span class="tier-badge tier-important">Важно</span> — сбои возможны, но стрим может идти;
+    <span class="tier-badge tier-optional">Необязательно</span> — на работу не влияет.
+    <span class="tier-badge tier-local">Локально</span> и
+    <span class="tier-badge tier-meta">Служебный</span> — в итог не учитываются.
+  </p>
+  <details class="dpi-help" open>
+    <summary>Что значит колонка <b>TCP 16-20</b></summary>
+    <p class="dpi-help-intro">
+      Checker сначала шлёт короткий запрос, потом «тяжёлый» (POST ~64&nbsp;KB или длинная цепочка HEAD).
+      По тому, <em>как</em> падает второй запрос, угадывается DPI у провайдера. Это эвристика, не точный диагноз.
+    </p>
+    <dl class="dpi-glossary">
+      <dt><span class="dpi-term bad">Detected❗️</span></dt>
+      <dd>
+        <b>Сильный сигнал блокировки.</b> Короткий запрос прошёл, тяжёлый завис до таймаута (~15&nbsp;с) —
+        типичная картина TCP&nbsp;16-20 у российского ISP. На критичных доменах Lovense, скорее всего, будут проблемы.
+      </dd>
+      <dt><span class="dpi-term skip">Probably❗️</span></dt>
+      <dd>
+        Хост уже не ответил на короткий запрос, но тяжёлый тест тоже ушёл в таймаут. Похоже на блокировку,
+        но доказательство слабее, чем у Detected.
+      </dd>
+      <dt><span class="dpi-term skip">Possible ⚠️</span></dt>
+      <dd>
+        Короткий запрос <b>прошёл</b>, тяжёлый <b>сразу упал</b> (не таймаут). Часто <b>не DPI</b>:
+        VPN, MTU, CDN не принимает POST на <code>/</code>. На VPN это обычно ложная тревога — Lovense в работе
+        такие запросы не шлёт.
+      </dd>
+      <dt><span class="dpi-term skip">Unlikely ⚠️</span></dt>
+      <dd>
+        Уже на этапе Alive — быстрый сбой (DNS, TLS, connection refused), и тяжёлый тест тоже сразу упал.
+        Скорее «хост не отвечает в браузере», а не DPI: локальный relay (<code>127-0-0-1.lovense.club</code>),
+        битый SSL, служебный домен. <b>Не путать с блокировкой провайдера.</b>
+      </dd>
+      <dt><span class="dpi-term ok">No ✅</span></dt>
+      <dd>Оба этапа прошли — признаков TCP&nbsp;16-20 не видно.</dd>
+      <dt><span class="dpi-term skip">Skip ⚠️</span></dt>
+      <dd>Хост недоступен (таймаут на Alive) — DPI-тест не запускался.</dd>
+    </dl>
+  </details>
   <table id="results">
     <tr>
       <th>#</th>
       <th>Service</th>
+      <th>Важность</th>
+      <th>Для Lovense</th>
       <th>Alive</th>
       <th>TCP 16-20</th>
     </tr>
@@ -33,7 +86,8 @@
     ❗️ В sandbox браузера TCP-соединения нельзя сбросить — повторные тесты могут искажать результат.
     Рекомендуется режим инкогнито или ручной сброс соединений перед <b>каждым</b> тестом
     (в Chrome: <a href="chrome://net-internals/#sockets">chrome://net-internals/#sockets</a>).<br><br>
-    💡 Проверка доступности доменов Lovense Cam Extension и OBS Toolset (метод TCP 16-20) /
+    💡 Колонка <b>Для Lovense</b> — итог по зоне с учётом важности (критичные блокировки влияют на вердикт, необязательные — нет).
+    Проверка доменов Lovense Cam Extension и OBS Toolset (метод TCP 16-20) /
     Подробнее о методе: <b><a href="https://github.com/net4people/bbs/issues/490" target="_blank">net4people/bbs#490</a></b>.<br>
     Основано на <b><a href="https://github.com/hyperion-cs/dpi-checkers" target="_blank">hyperion-cs/dpi-checkers</a></b>.
     Исходники: <b><a href="https://github.com/bymakk/hyperion-lovence-checker" target="_blank">hyperion-lovence-checker</a></b>.

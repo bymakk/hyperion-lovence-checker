@@ -15,6 +15,32 @@ const DPI_METHOD_PROBABLY = 2;
 const DPI_METHOD_POSSIBLE = 3;
 const DPI_METHOD_UNLIKELY = 4;
 
+const TIER_CRITICAL = "critical";
+const TIER_IMPORTANT = "important";
+const TIER_OPTIONAL = "optional";
+const TIER_LOCAL = "local";
+const TIER_META = "meta";
+
+const WORK_OK = "ok";
+const WORK_WARN = "warn";
+const WORK_FAIL = "fail";
+const WORK_NA = "na";
+
+const TIER_LABELS = {
+  [TIER_CRITICAL]: "Критично",
+  [TIER_IMPORTANT]: "Важно",
+  [TIER_OPTIONAL]: "Необязательно",
+  [TIER_LOCAL]: "Локально",
+  [TIER_META]: "Служебный",
+};
+
+const WORK_LABELS = {
+  [WORK_OK]: "Работает",
+  [WORK_WARN]: "Под вопросом",
+  [WORK_FAIL]: "Не работает",
+  [WORK_NA]: "Не влияет",
+};
+
 let testSuite = []; // Fetched from ./suite.v2.json
 let timeoutMs = 15000;
 let clientAsn = 0;
@@ -54,6 +80,11 @@ const logEl = document.getElementById("log");
 const resultsEl = document.getElementById("results");
 const shareTsEl = document.getElementById("shareTs");
 const asnEl = document.getElementById("asn");
+const verdictEl = document.getElementById("verdict");
+const verdictIconEl = document.getElementById("verdict-icon");
+const verdictTitleEl = document.getElementById("verdict-title");
+const verdictTextEl = document.getElementById("verdict-text");
+const verdictDetailsEl = document.getElementById("verdict-details");
 
 const toggleUI = (locked) => {
   shareButtonEl.disabled = locked;
@@ -107,14 +138,16 @@ const startOrchestrator = async () => {
   }
 
   resultItems = {};
+  verdictEl.className = "verdict verdict-hidden";
 
   try {
     const tasks = [];
     for (let t of testSuite) {
-      tasks.push(checkDpi(t.id, t.provider, t.host, t.country));
+      tasks.push(checkDpi(t.id, t.provider, t.host, t.country, t.tier || TIER_OPTIONAL, t.hint || ""));
     }
 
     await Promise.all(tasks);
+    renderVerdict();
     statusEl.textContent = "Ready ⚡";
     statusEl.className = "status-ready";
   } catch (e) {
@@ -173,13 +206,122 @@ const dpiHugeReqlineHeadMethod = async (alive, host) => {
   return DPI_METHOD_NOT_DETECTED;
 };
 
-const checkDpi = async (id, provider, host, country) => {
+const assessEndpoint = (tier, alive, dpi) => {
+  if (tier === TIER_META || tier === TIER_LOCAL) {
+    return WORK_NA;
+  }
+
+  const dpiHardBlock = dpi === DPI_METHOD_DETECTED || dpi === DPI_METHOD_PROBABLY;
+
+  if (alive === ALIVE_NO || dpiHardBlock) {
+    return tier === TIER_OPTIONAL ? WORK_NA : WORK_FAIL;
+  }
+
+  if (alive === ALIVE_UNKNOWN || dpi === DPI_METHOD_UNLIKELY) {
+    return tier === TIER_OPTIONAL ? WORK_NA : WORK_WARN;
+  }
+
+  if (dpi === DPI_METHOD_POSSIBLE) {
+    return tier === TIER_CRITICAL ? WORK_WARN : WORK_OK;
+  }
+
+  return WORK_OK;
+};
+
+const setPrettyTier = (el, tier) => {
+  el.textContent = TIER_LABELS[tier] || tier;
+  el.className = `tier-badge tier-${tier}`;
+  el.title = "";
+};
+
+const setPrettyWork = (el, work) => {
+  const icons = {
+    [WORK_OK]: "✅",
+    [WORK_WARN]: "⚠️",
+    [WORK_FAIL]: "❌",
+    [WORK_NA]: "➖",
+  };
+  el.textContent = `${icons[work]} ${WORK_LABELS[work]}`;
+  el.className = `work-${work}`;
+};
+
+const renderVerdict = () => {
+  const rows = testSuite
+    .map((t) => {
+      const r = resultItems[t.id];
+      if (!r) return null;
+      const alive = r[ALIVE_KEY];
+      const dpi = r[DPI_METHOD_KEY] ?? DPI_METHOD_NOT_DETECTED;
+      const tier = t.tier || TIER_OPTIONAL;
+      const work = assessEndpoint(tier, alive, dpi);
+      return { ...t, alive, dpi, tier, work };
+    })
+    .filter(Boolean);
+
+  const critical = rows.filter((r) => r.tier === TIER_CRITICAL);
+  const important = rows.filter((r) => r.tier === TIER_IMPORTANT);
+  const criticalFails = critical.filter((r) => r.work === WORK_FAIL);
+  const criticalWarns = critical.filter((r) => r.work === WORK_WARN);
+  const importantFails = important.filter((r) => r.work === WORK_FAIL);
+  const importantWarns = important.filter((r) => r.work === WORK_WARN);
+
+  let level = "ok";
+  let title = "Lovense должен работать";
+  let text = "Все критичные домены доступны, признаков жёсткой блокировки DPI нет.";
+  let icon = "✅";
+
+  if (criticalFails.length > 0) {
+    level = "bad";
+    title = "Скорее всего будут проблемы";
+    text = "Не доступны критичные зоны — Extension и OBS Toolset могут не подключаться к облаку или обрывать связь.";
+    icon = "❌";
+  } else if (criticalWarns.length > 0 || importantFails.length > 0) {
+    level = "warn";
+    title = "Скорее всего будет работать";
+    text = "Основные сервисы в порядке, но есть предупреждения — возможны сбои переводов, логов или ложные срабатывания на VPN.";
+    icon = "⚠️";
+  } else if (importantWarns.length > 0) {
+    level = "warn";
+    title = "Должно работать с оговорками";
+    text = "Критичные зоны в норме. Второстепенные сервисы под вопросом — на стрим это обычно не влияет.";
+    icon = "⚠️";
+  }
+
+  verdictEl.className = `verdict verdict-${level}`;
+  verdictIconEl.textContent = icon;
+  verdictTitleEl.textContent = title;
+  verdictTextEl.textContent = text;
+  verdictDetailsEl.innerHTML = "";
+
+  const addDetail = (label, items) => {
+    if (!items.length) return;
+    const li = document.createElement("li");
+    li.innerHTML = `<b>${label}:</b> ${items.map((r) => `${r.country} ${r.provider}`).join(", ")}`;
+    verdictDetailsEl.appendChild(li);
+  };
+
+  addDetail("Критичные — не работают", criticalFails);
+  addDetail("Критичные — под вопросом", criticalWarns);
+  addDetail("Важные — не работают", importantFails);
+  addDetail("Важные — под вопросом", importantWarns);
+
+  if (!criticalFails.length && !criticalWarns.length && !importantFails.length && !importantWarns.length) {
+    const li = document.createElement("li");
+    li.textContent = "Критичные и важные зоны прошли проверку.";
+    verdictDetailsEl.appendChild(li);
+  }
+};
+
+const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint = "") => {
   const prefix = `DPI checking(#${id})`;
   let t0 = performance.now();
 
   const row = resultsEl.insertRow();
+  row.dataset.tier = tier;
   const idCell = row.insertCell();
   const providerCell = row.insertCell();
+  const tierCell = row.insertCell();
+  const workCell = row.insertCell();
   const aliveStatusCell = row.insertCell();
   const dpiStatusCell = row.insertCell();
 
@@ -189,6 +331,10 @@ const checkDpi = async (id, provider, host, country) => {
   idCell.textContent = id;
   resultItems[id] = {};
   setPrettyProvider(providerCell, provider, country);
+  if (hint) providerCell.title = hint;
+  setPrettyTier(tierCell, tier);
+  workCell.textContent = "Checking ⏰";
+  workCell.className = "";
   setStatus(aliveStatusCell, "Checking ⏰", "");
   setStatus(dpiStatusCell, "Waiting ⏰", "");
 
@@ -220,6 +366,7 @@ const checkDpi = async (id, provider, host, country) => {
   if (!alive && !possibleAlive) {
     setPrettyDpi(dpiStatusCell, ALIVE_NO, null); // -> skip
     resultItems[id][DPI_METHOD_KEY] = DPI_METHOD_NOT_DETECTED; // default value
+    setPrettyWork(workCell, assessEndpoint(tier, resultItems[id][ALIVE_KEY], DPI_METHOD_NOT_DETECTED));
     return;
   }
 
@@ -230,6 +377,7 @@ const checkDpi = async (id, provider, host, country) => {
     logPush("INFO", prefix, `tcp 16-20: detected❗️, method: 1`);
     setPrettyDpi(dpiStatusCell, resultItems[id][ALIVE_KEY], m1);
     resultItems[id][DPI_METHOD_KEY] = DPI_METHOD_DETECTED;
+    setPrettyWork(workCell, assessEndpoint(tier, resultItems[id][ALIVE_KEY], m1));
     return;
   }
 
@@ -247,17 +395,22 @@ const checkDpi = async (id, provider, host, country) => {
   }
 
   logPush("INFO", prefix, logDpiMap[m2]);
+  setPrettyWork(workCell, assessEndpoint(tier, resultItems[id][ALIVE_KEY], m2));
 };
 
 const insertDebugRow = () => {
   const row = resultsEl.insertRow();
   const idCell = row.insertCell();
   const providerCell = row.insertCell();
+  const tierCell = row.insertCell();
+  const workCell = row.insertCell();
   const aliveStatusCell = row.insertCell();
   const dpiStatusCell = row.insertCell();
 
   idCell.textContent = "XY.ABCD-01"
   providerCell.textContent = "🇺🇸 AbcdefQwerty"
+  setPrettyTier(tierCell, TIER_CRITICAL);
+  setPrettyWork(workCell, WORK_WARN);
   aliveStatusCell.textContent = "Checking ⏰"
   dpiStatusCell.textContent = "Checking ⏰"
 }
@@ -322,18 +475,34 @@ const setPrettyAlive = (el, alive) => {
 
 const renderShare = (share) => {
   shareTsEl.textContent = `Test timestamp: ${prettyTs(share.ts)}`;
+  testSuite = share.items.map((v) => ({
+    id: v.id,
+    provider: v.provider,
+    country: v.country,
+    host: v.host,
+    tier: v.tier || TIER_OPTIONAL,
+    hint: v.hint || "",
+  }));
   for (let v of share.items) {
     const row = resultsEl.insertRow();
+    row.dataset.tier = v.tier || TIER_OPTIONAL;
     const idCell = row.insertCell();
     const providerCell = row.insertCell();
+    const tierCell = row.insertCell();
+    const workCell = row.insertCell();
     const aliveStatusCell = row.insertCell();
     const dpiStatusCell = row.insertCell();
 
     idCell.textContent = v.id;
     setPrettyProvider(providerCell, v.provider, v.country);
+    if (v.hint) providerCell.title = v.hint;
+    setPrettyTier(tierCell, v.tier || TIER_OPTIONAL);
+    setPrettyWork(workCell, assessEndpoint(v.tier || TIER_OPTIONAL, v.alive, v.dpi));
     setPrettyAlive(aliveStatusCell, v.alive);
     setPrettyDpi(dpiStatusCell, v.alive, v.dpi);
+    resultItems[v.id] = { [ALIVE_KEY]: v.alive, [DPI_METHOD_KEY]: v.dpi };
   }
+  renderVerdict();
 };
 
 // the contract should not be changed because it is used by historical functions
