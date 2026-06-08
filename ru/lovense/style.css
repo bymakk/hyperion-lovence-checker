@@ -113,10 +113,15 @@ td {
 }
 
 #results th:nth-child(3),
-#results td:nth-child(3),
+#results td.col-tier {
+  min-width: 118px;
+  text-align: center;
+}
+
 #results th:nth-child(4),
-#results td:nth-child(4) {
-  min-width: 108px;
+#results td.col-work {
+  min-width: 118px;
+  text-align: center;
 }
 
 #results th:nth-child(5),
@@ -127,8 +132,14 @@ td {
   white-space: nowrap;
 }
 
-#results td .tier-badge {
-  display: inline-block;
+#results td.col-tier .tier-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 4px 10px;
+  line-height: 1.25;
+  box-sizing: border-box;
 }
 
 th {

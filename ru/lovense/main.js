@@ -229,8 +229,13 @@ const assessEndpoint = (tier, alive, dpi) => {
 };
 
 const setPrettyTier = (el, tier) => {
-  el.textContent = TIER_LABELS[tier] || tier;
-  el.className = `tier-badge tier-${tier}`;
+  const label = TIER_LABELS[tier] || tier;
+  el.className = "col-tier";
+  el.replaceChildren();
+  const badge = document.createElement("span");
+  badge.className = `tier-badge tier-${tier}`;
+  badge.textContent = label;
+  el.appendChild(badge);
   el.title = "";
 };
 
@@ -242,7 +247,7 @@ const setPrettyWork = (el, work) => {
     [WORK_NA]: "➖",
   };
   el.textContent = `${icons[work]} ${WORK_LABELS[work]}`;
-  el.className = `work-${work}`;
+  el.className = `col-work work-${work}`;
 };
 
 const renderVerdict = () => {
