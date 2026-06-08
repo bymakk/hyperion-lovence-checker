@@ -41,6 +41,14 @@ const WORK_LABELS = {
   [WORK_NA]: "Не влияет",
 };
 
+const TIER_CELL_CLASS = {
+  [TIER_CRITICAL]: "tier-cell-critical",
+  [TIER_IMPORTANT]: "tier-cell-important",
+  [TIER_OPTIONAL]: "tier-cell-optional",
+  [TIER_LOCAL]: "tier-cell-local",
+  [TIER_META]: "tier-cell-meta",
+};
+
 let testSuite = []; // Fetched from ./suite.v2.json
 let timeoutMs = 15000;
 let clientAsn = 0;
@@ -115,6 +123,14 @@ const getUniqueUrl = url => {
   return url.includes('?') ? `${url}&t=${Math.random()}` : `${url}?t=${Math.random()}`;
 };
 
+const buildProbeUrl = (host, probePath, extraQuery = "") => {
+  let url = `https://${host}${probePath || "/"}`;
+  if (extraQuery) {
+    url += url.includes("?") ? `&${extraQuery}` : `?${extraQuery}`;
+  }
+  return getUniqueUrl(url);
+};
+
 const getRandomData = size => {
   const data = new Uint8Array(size);
   const grvMax = 64 * 1024; // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues
@@ -143,7 +159,10 @@ const startOrchestrator = async () => {
   try {
     const tasks = [];
     for (let t of testSuite) {
-      tasks.push(checkDpi(t.id, t.provider, t.host, t.country, t.tier || TIER_OPTIONAL, t.hint || ""));
+      tasks.push(checkDpi(
+        t.id, t.provider, t.host, t.country,
+        t.tier || TIER_OPTIONAL, t.hint || "", t.probe || "/"
+      ));
     }
 
     await Promise.all(tasks);
@@ -172,14 +191,14 @@ const handleDpiMethodErr = (alive, e) => {
   return DPI_METHOD_UNLIKELY; // alive — instant error, push — instant error
 };
 
-const dpiHugeBodyPostMethod = async (alive, host) => {
+const dpiHugeBodyPostMethod = async (alive, host, probePath) => {
   try {
     const dpiCtrl = new AbortController();
     const dpiTimeoutId = setTimeout(() => dpiCtrl.abort(), timeoutMs);
     const opt = getDefaultFetchOpt(dpiCtrl, "POST")
     opt.body = getRandomData(DPI_THR_BYTES)
-    const url = `https://${host}/`;
-    await fetch(getUniqueUrl(url), opt);
+    const url = buildProbeUrl(host, probePath);
+    await fetch(url, opt);
     clearTimeout(dpiTimeoutId);
   } catch (e) {
     return handleDpiMethodErr(alive, e);
@@ -188,15 +207,15 @@ const dpiHugeBodyPostMethod = async (alive, host) => {
   return DPI_METHOD_NOT_DETECTED;
 };
 
-const dpiHugeReqlineHeadMethod = async (alive, host) => {
+const dpiHugeReqlineHeadMethod = async (alive, host, probePath) => {
   try {
     const times = DPI_THR_BYTES / MAX_URI_X_SIZE;
     const dpiCtrl = new AbortController();
     const dpiTimeoutId = setTimeout(() => dpiCtrl.abort(), timeoutMs);
     for (let i = 0; i < times; i++) {
       const opt = getDefaultFetchOpt(dpiCtrl, "HEAD") // HEAD seems to be stable keep-alived 
-      const url = `https://${host}/?x=${getRandomSafeData(MAX_URI_X_SIZE)}`
-      await fetch(getUniqueUrl(url), opt);
+      const url = buildProbeUrl(host, probePath, `x=${getRandomSafeData(MAX_URI_X_SIZE)}`);
+      await fetch(url, opt);
     }
     clearTimeout(dpiTimeoutId);
   } catch (e) {
@@ -229,14 +248,8 @@ const assessEndpoint = (tier, alive, dpi) => {
 };
 
 const setPrettyTier = (el, tier) => {
-  const label = TIER_LABELS[tier] || tier;
-  el.className = "col-tier";
-  el.replaceChildren();
-  const badge = document.createElement("span");
-  badge.className = `tier-badge tier-${tier}`;
-  badge.textContent = label;
-  el.appendChild(badge);
-  el.title = "";
+  el.textContent = TIER_LABELS[tier] || tier;
+  el.className = `col-tier ${TIER_CELL_CLASS[tier] || ""}`;
 };
 
 const setPrettyWork = (el, work) => {
@@ -317,7 +330,7 @@ const renderVerdict = () => {
   }
 };
 
-const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint = "") => {
+const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint = "", probe = "/") => {
   const prefix = `DPI checking(#${id})`;
   let t0 = performance.now();
 
@@ -336,7 +349,7 @@ const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint 
   idCell.textContent = id;
   resultItems[id] = {};
   setPrettyProvider(providerCell, provider, country);
-  if (hint) providerCell.title = hint;
+  providerCell.title = [hint, probe && probe !== "/" ? `Проверка: ${probe}` : ""].filter(Boolean).join("\n");
   setPrettyTier(tierCell, tier);
   workCell.textContent = "Checking ⏰";
   workCell.className = "col-work";
@@ -347,8 +360,8 @@ const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint 
     // alive check
     const aliveCtrl = new AbortController();
     const aliveTimeoutId = setTimeout(() => aliveCtrl.abort(), timeoutMs);
-    const url = `https://${host}/`
-    await fetch(getUniqueUrl(url), getDefaultFetchOpt(aliveCtrl, "HEAD"));
+    const url = buildProbeUrl(host, probe);
+    await fetch(url, getDefaultFetchOpt(aliveCtrl, "HEAD"));
     clearTimeout(aliveTimeoutId);
     logPush("INFO", prefix, `alived: yes 🟢, reqtime: ${timeElapsed(t0)}`);
     resultItems[id][ALIVE_KEY] = ALIVE_YES;
@@ -377,7 +390,7 @@ const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint 
 
   // dpi check
   setStatus(dpiStatusCell, "Checking ⏰", "");
-  const m1 = await dpiHugeBodyPostMethod(alive, host);
+  const m1 = await dpiHugeBodyPostMethod(alive, host, probe);
   if (m1 == DPI_METHOD_DETECTED) {
     logPush("INFO", prefix, `tcp 16-20: detected❗️, method: 1`);
     setPrettyDpi(dpiStatusCell, resultItems[id][ALIVE_KEY], m1);
@@ -387,7 +400,7 @@ const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint 
   }
 
   t0 = performance.now();
-  const m2 = await dpiHugeReqlineHeadMethod(alive, host);
+  const m2 = await dpiHugeReqlineHeadMethod(alive, host, probe);
   resultItems[id][DPI_METHOD_KEY] = m2;
   setPrettyDpi(dpiStatusCell, resultItems[id][ALIVE_KEY], m2);
 
@@ -487,6 +500,7 @@ const renderShare = (share) => {
     host: v.host,
     tier: v.tier || TIER_OPTIONAL,
     hint: v.hint || "",
+    probe: v.probe || "/",
   }));
   for (let v of share.items) {
     const row = resultsBodyEl.insertRow();
@@ -500,7 +514,7 @@ const renderShare = (share) => {
 
     idCell.textContent = v.id;
     setPrettyProvider(providerCell, v.provider, v.country);
-    if (v.hint) providerCell.title = v.hint;
+    providerCell.title = [v.hint, v.probe && v.probe !== "/" ? `Проверка: ${v.probe}` : ""].filter(Boolean).join("\n");
     setPrettyTier(tierCell, v.tier || TIER_OPTIONAL);
     setPrettyWork(workCell, assessEndpoint(v.tier || TIER_OPTIONAL, v.alive, v.dpi));
     setPrettyAlive(aliveStatusCell, v.alive);
