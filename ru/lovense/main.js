@@ -78,6 +78,8 @@ const shareButtonEl = document.getElementById("share-btn");
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
 const resultsEl = document.getElementById("results");
+const resultsBodyEl = document.getElementById("results-body");
+const tableWrapEl = document.getElementById("table-wrap");
 const shareTsEl = document.getElementById("shareTs");
 const asnEl = document.getElementById("asn");
 const verdictEl = document.getElementById("verdict");
@@ -133,9 +135,7 @@ const startOrchestrator = async () => {
   statusEl.textContent = "Checking ⏰";
   statusEl.className = "status-checking";
 
-  for (let i = resultsEl.rows.length - 1; i > 0; i--) {
-    resultsEl.deleteRow(i);
-  }
+  resultsBodyEl.replaceChildren();
 
   resultItems = {};
   verdictEl.className = "verdict verdict-hidden";
@@ -316,7 +316,7 @@ const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint 
   const prefix = `DPI checking(#${id})`;
   let t0 = performance.now();
 
-  const row = resultsEl.insertRow();
+  const row = resultsBodyEl.insertRow();
   row.dataset.tier = tier;
   const idCell = row.insertCell();
   const providerCell = row.insertCell();
@@ -399,7 +399,7 @@ const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint 
 };
 
 const insertDebugRow = () => {
-  const row = resultsEl.insertRow();
+  const row = resultsBodyEl.insertRow();
   const idCell = row.insertCell();
   const providerCell = row.insertCell();
   const tierCell = row.insertCell();
@@ -484,7 +484,7 @@ const renderShare = (share) => {
     hint: v.hint || "",
   }));
   for (let v of share.items) {
-    const row = resultsEl.insertRow();
+    const row = resultsBodyEl.insertRow();
     row.dataset.tier = v.tier || TIER_OPTIONAL;
     const idCell = row.insertCell();
     const providerCell = row.insertCell();
@@ -524,7 +524,7 @@ const tryHandleShare = async () => {
     headerEl.hidden = false;
 
     try {
-      resultsEl.hidden = true;
+      tableWrapEl.hidden = true;
       logEl.hidden = true;
       const buf = Uint8Array.fromBase64(share, { alphabet: "base64url" });
       const h = await import('./share/helpers.js');
@@ -539,7 +539,7 @@ const tryHandleShare = async () => {
       const decoded = await decodeShare(h.REPO, commitHex, buf);
       fetchAsnBasic(decoded.asn);
       renderShare(decoded);
-      resultsEl.hidden = false;
+      tableWrapEl.hidden = false;
     }
     catch (e) {
       console.log(e);

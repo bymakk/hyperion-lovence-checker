@@ -4,8 +4,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Lovense CDN/API DPI Checker</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=3">
   <link rel="preconnect" href="https://api.github.com" />
   <link rel="preconnect" href="https://stat.ripe.net" />
 </head>
@@ -28,59 +29,76 @@
       <ul id="verdict-details" class="verdict-details"></ul>
     </div>
   </div>
-  <p class="legend">
-    <b>Важность:</b>
-    <span class="tier-badge tier-critical">Критично</span> — без этого Extension/OBS не работают;
-    <span class="tier-badge tier-important">Важно</span> — сбои возможны, но стрим может идти;
-    <span class="tier-badge tier-optional">Необязательно</span> — на работу не влияет.
-    <span class="tier-badge tier-local">Локально</span> и
-    <span class="tier-badge tier-meta">Служебный</span> — в итог не учитываются.
-  </p>
-  <details class="dpi-help" open>
-    <summary>Что значит колонка <b>TCP 16-20</b></summary>
-    <p class="dpi-help-intro">
-      Checker сначала шлёт короткий запрос, потом «тяжёлый» (POST ~64&nbsp;KB или длинная цепочка HEAD).
-      По тому, <em>как</em> падает второй запрос, угадывается DPI у провайдера. Это эвристика, не точный диагноз.
-    </p>
-    <dl class="dpi-glossary">
-      <dt><span class="dpi-term bad">Detected❗️</span></dt>
-      <dd>
-        <b>Сильный сигнал блокировки.</b> Короткий запрос прошёл, тяжёлый завис до таймаута (~15&nbsp;с) —
-        типичная картина TCP&nbsp;16-20 у российского ISP. На критичных доменах Lovense, скорее всего, будут проблемы.
-      </dd>
-      <dt><span class="dpi-term skip">Probably❗️</span></dt>
-      <dd>
-        Хост уже не ответил на короткий запрос, но тяжёлый тест тоже ушёл в таймаут. Похоже на блокировку,
-        но доказательство слабее, чем у Detected.
-      </dd>
-      <dt><span class="dpi-term skip">Possible ⚠️</span></dt>
-      <dd>
-        Короткий запрос <b>прошёл</b>, тяжёлый <b>сразу упал</b> (не таймаут). Часто <b>не DPI</b>:
-        VPN, MTU, CDN не принимает POST на <code>/</code>. На VPN это обычно ложная тревога — Lovense в работе
-        такие запросы не шлёт.
-      </dd>
-      <dt><span class="dpi-term skip">Unlikely ⚠️</span></dt>
-      <dd>
-        Уже на этапе Alive — быстрый сбой (DNS, TLS, connection refused), и тяжёлый тест тоже сразу упал.
-        Скорее «хост не отвечает в браузере», а не DPI: локальный relay (<code>127-0-0-1.lovense.club</code>),
-        битый SSL, служебный домен. <b>Не путать с блокировкой провайдера.</b>
-      </dd>
-      <dt><span class="dpi-term ok">No ✅</span></dt>
-      <dd>Оба этапа прошли — признаков TCP&nbsp;16-20 не видно.</dd>
-      <dt><span class="dpi-term skip">Skip ⚠️</span></dt>
-      <dd>Хост недоступен (таймаут на Alive) — DPI-тест не запускался.</dd>
-    </dl>
-  </details>
-  <table id="results">
-    <tr>
-      <th>#</th>
-      <th>Service</th>
-      <th>Важность</th>
-      <th>Для Lovense</th>
-      <th>Alive</th>
-      <th>TCP 16-20</th>
-    </tr>
-  </table>
+  <section class="help-panel">
+    <h2 class="help-heading">Подсказки</h2>
+    <div class="tier-legend">
+      <div class="tier-legend-item">
+        <span class="tier-badge tier-critical">Критично</span>
+        <span>Без этого Extension / OBS не работают</span>
+      </div>
+      <div class="tier-legend-item">
+        <span class="tier-badge tier-important">Важно</span>
+        <span>Сбои возможны, стрим может идти</span>
+      </div>
+      <div class="tier-legend-item">
+        <span class="tier-badge tier-optional">Необязательно</span>
+        <span>На работу Lovense не влияет</span>
+      </div>
+      <div class="tier-legend-item">
+        <span class="tier-badge tier-local">Локально</span>
+        <span class="tier-badge tier-meta">Служебный</span>
+        <span>В итоговый вердикт не входят</span>
+      </div>
+    </div>
+    <details class="dpi-help">
+      <summary>Что значит колонка <b>TCP 16-20</b></summary>
+      <p class="dpi-help-intro">
+        Сначала короткий запрос, потом «тяжёлый» (POST ~64&nbsp;KB или длинная цепочка HEAD).
+        По тому, как падает второй запрос, угадывается DPI у провайдера. Это эвристика, не точный диагноз.
+      </p>
+      <div class="dpi-cards">
+        <article class="dpi-card dpi-card-bad">
+          <h3 class="dpi-card-title">Detected❗️</h3>
+          <p><b>Сильный сигнал блокировки.</b> Короткий запрос прошёл, тяжёлый завис до таймаута (~15&nbsp;с) — типичная картина TCP&nbsp;16-20 у ISP.</p>
+        </article>
+        <article class="dpi-card dpi-card-warn">
+          <h3 class="dpi-card-title">Probably❗️</h3>
+          <p>Короткий запрос не прошёл, тяжёлый тоже ушёл в таймаут. Похоже на блокировку, но слабее, чем Detected.</p>
+        </article>
+        <article class="dpi-card dpi-card-warn">
+          <h3 class="dpi-card-title">Possible ⚠️</h3>
+          <p>Короткий запрос прошёл, тяжёлый сразу упал. Часто VPN, MTU или CDN — не классический DPI.</p>
+        </article>
+        <article class="dpi-card dpi-card-muted">
+          <h3 class="dpi-card-title">Unlikely ⚠️</h3>
+          <p>Быстрый сбой на Alive (DNS, TLS, localhost). Хост не отвечает в браузере — не путать с блокировкой ISP.</p>
+        </article>
+        <article class="dpi-card dpi-card-ok">
+          <h3 class="dpi-card-title">No ✅</h3>
+          <p>Оба этапа прошли — признаков TCP&nbsp;16-20 не видно.</p>
+        </article>
+        <article class="dpi-card dpi-card-muted">
+          <h3 class="dpi-card-title">Skip ⚠️</h3>
+          <p>Хост недоступен (таймаут на Alive) — DPI-тест не запускался.</p>
+        </article>
+      </div>
+    </details>
+  </section>
+  <div class="table-wrap" id="table-wrap">
+    <table id="results">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Service</th>
+          <th>Важность</th>
+          <th>Для Lovense</th>
+          <th>Alive</th>
+          <th>TCP 16-20</th>
+        </tr>
+      </thead>
+      <tbody id="results-body"></tbody>
+    </table>
+  </div>
   <pre id="log"></pre>
   <div class="footer">
     ❗️ В sandbox браузера TCP-соединения нельзя сбросить — повторные тесты могут искажать результат.
@@ -92,8 +110,8 @@
     Основано на <b><a href="https://github.com/hyperion-cs/dpi-checkers" target="_blank">hyperion-cs/dpi-checkers</a></b>.
     Исходники: <b><a href="https://github.com/bymakk/hyperion-lovence-checker" target="_blank">hyperion-lovence-checker</a></b>.
   </div>
-  <script src="main.js"></script>
-  <script src="share/encoder.js"></script>
+  <script src="main.js?v=3"></script>
+  <script src="share/encoder.js?v=3"></script>
 </body>
 
 </html>
