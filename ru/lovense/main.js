@@ -339,7 +339,7 @@ const checkDpi = async (id, provider, host, country, tier = TIER_OPTIONAL, hint 
   if (hint) providerCell.title = hint;
   setPrettyTier(tierCell, tier);
   workCell.textContent = "Checking ⏰";
-  workCell.className = "";
+  workCell.className = "col-work";
   setStatus(aliveStatusCell, "Checking ⏰", "");
   setStatus(dpiStatusCell, "Waiting ⏰", "");
 
